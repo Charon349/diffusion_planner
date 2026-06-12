@@ -70,9 +70,21 @@ def _get_ego_anchors(anchor_args, device: torch.device, future_len: int) -> torc
     return anchors.to(device)
 
 
-def _anchor_distances(anchors: torch.Tensor, ego_future: torch.Tensor) -> torch.Tensor:
+def _anchor_distances(anchors: torch.Tensor, ego_future: torch.Tensor, w_lat: float = 1.0, w_lon: float = 0.2) -> torch.Tensor:
     anchor_xy = torch.cumsum(anchors[..., :2], dim=1)
-    dist = torch.linalg.norm(anchor_xy[None] - ego_future[:, None, :, :2], dim=-1).mean(dim=-1)
+    diff_xy = anchor_xy[None] - ego_future[:, None, :, :2]
+    
+    # ego_future[..., 2] is cos(heading), ego_future[..., 3] is sin(heading)
+    gt_cos = ego_future[:, None, :, 2]
+    gt_sin = ego_future[:, None, :, 3]
+    
+    # Lateral error: projection onto normal vector (-sin, cos)
+    lat_err = torch.abs(diff_xy[..., 0] * (-gt_sin) + diff_xy[..., 1] * gt_cos)
+    
+    # Longitudinal error: projection onto heading vector (cos, sin)
+    lon_err = torch.abs(diff_xy[..., 0] * gt_cos + diff_xy[..., 1] * gt_sin)
+    
+    dist = (w_lat * lat_err + w_lon * lon_err).mean(dim=-1)
     return dist
 
 
@@ -177,7 +189,9 @@ def anchored_diffusion_loss_func(
     current_states = torch.cat([ego_current[:, None], neighbors_current], dim=1)
     P = gt_future.shape[1]
 
-    anchor_dist = _anchor_distances(anchors, ego_future)
+    w_lat = getattr(anchor_args, "anchor_w_lat", 1.0)
+    w_lon = getattr(anchor_args, "anchor_w_lon", 0.2)
+    anchor_dist = _anchor_distances(anchors, ego_future, w_lat, w_lon)
     pos_k = anchor_dist.argmin(dim=1)
     top_anchor_dist = torch.topk(anchor_dist, k=min(2, K), dim=1, largest=False).values
     best_anchor_dist = top_anchor_dist[:, 0]

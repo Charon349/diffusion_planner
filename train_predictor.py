@@ -1,5 +1,6 @@
 '''
-
+K个ego mode在同一个DiT sequence里，而不是复制K个DiT sequence，每个对应一个ego mode。
+通过mask避免不同anchor之间互相看，降低GPU和显存需求。
 '''
 import os
 import torch
@@ -127,6 +128,8 @@ def get_args():
     parser.add_argument('--anchor_score_loss', default=0.1, type=float)
     parser.add_argument('--anchor_score_loss_type', default='focal', choices=['focal', 'ce', 'soft_ce'], type=str)
     parser.add_argument('--anchor_score_soft_label_tau', default=1.0, type=float)
+    parser.add_argument('--anchor_w_lat', default=1.0, type=float, help='weight for lateral error in GT distance')
+    parser.add_argument('--anchor_w_lon', default=0.2, type=float, help='weight for longitudinal error in GT distance')
     parser.add_argument('--use_anchor_score', default=True, type=boolean)
     parser.add_argument('--anchor_sampling_t_start', default=0.2, type=float)
     parser.add_argument('--anchor_sampling_steps', default=10, type=int)
