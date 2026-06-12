@@ -1,6 +1,7 @@
 '''
 K个ego mode在同一个DiT sequence里，而不是复制K个DiT sequence，每个对应一个ego mode。
 通过mask避免不同anchor之间互相看，降低GPU和显存需求。
+计算anchor与GT的距离不再是l2距离，而是横纵向解耦 
 '''
 import os
 import torch
