@@ -1,0 +1,32 @@
+program: train_predictor.py
+method: grid
+
+metric:
+  name: train_loss/anchor_top3_acc
+  goal: maximize
+
+command:
+  - ${env}
+  - bash
+  - sweeps/run_anchor_score_sweep_trial.sh
+  - ${args}
+
+parameters:
+  anchor_score_loss_type:
+    values: ["focal", "ce", "soft_ce"]
+
+  anchor_score_soft_label_tau:
+    values: [0.5, 1.0, 2.0]
+
+  anchor_score_loss:
+    values: [0.05, 0.1, 0.2]
+
+  num_ego_anchors:
+    values: [128]
+
+  anchor_t_sync:
+    values: [0.2, 0.3]
+  
+  target_effective_batch_size:
+    values: [1024, 2048]
+

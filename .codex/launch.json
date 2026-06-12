@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Diffusion Planner Train CPU",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/train_predictor.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "--train_set", "/home/wangchenggang/wcg/Diffusion-Planner/data",
+        "--train_set_list", "/home/wangchenggang/wcg/Diffusion-Planner/data_train_3.json",
+        "--ddp", "false",
+        "--device", "cpu",
+        "--batch_size", "1",
+        "--train_epochs", "10",
+        "--warm_up_epoch", "2",
+        "--save_utd", "1",
+        "--num_workers", "0",
+        "--use_data_augment", "false",
+        "--save_dir", "./debug_training"
+      ],
+      "justMyCode": false
+    }
+  ]
+}

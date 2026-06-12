@@ -245,12 +245,16 @@ class LaneFusionEncoder(nn.Module):
         if has_speed_limit.sum() > 0:
             speed_limit_with_limit = self.speed_limit_emb(speed_limit[has_speed_limit].unsqueeze(-1))
             speed_limit_embedding[has_speed_limit] = speed_limit_with_limit
+        else:
+            speed_limit_embedding = speed_limit_embedding + 0.0 * self.speed_limit_emb.weight.sum()
 
         if (~has_speed_limit).sum() > 0:
             speed_limit_no_limit = self.unknown_speed_emb.weight.expand(
                 (~has_speed_limit).sum().item(), -1
             )
             speed_limit_embedding[~has_speed_limit] = speed_limit_no_limit
+        else:
+            speed_limit_embedding = speed_limit_embedding + 0.0 * self.unknown_speed_emb.weight.sum()
 
         # Process traffic lights directly for valid positions
         traffic = traffic[valid_indices]

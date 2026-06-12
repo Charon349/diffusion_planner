@@ -1,0 +1,7 @@
+wandb==0.15.12 #版本太高会引发其他库冲突
+训练时 config 是 argparse.Namespace，但 Decoder 会统一读取：config.guidance_fn 训练不需要 guidance，所以设成 None 即可。在train_predictor的get_args()里添加args.guidance_fn = None
+
+训练任务
+cd /mnt/workspace/users/wangchenggang/Diffusion-Planner
+source /mnt/workspace/miniconda3/bin/activate wcg-difplnr
+bash ./torch_run.sh

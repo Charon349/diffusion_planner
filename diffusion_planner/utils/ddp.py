@@ -14,8 +14,10 @@ def ddp_setup_universal(verbose=False, args=None):
               rank = int(os.environ["RANK"])
               world_size = int(os.environ['WORLD_SIZE'])
               gpu = int(os.environ['LOCAL_RANK'])
-              os.environ['MASTER_PORT'] = str(getattr(args, 'port', '29529'))
-              os.environ["MASTER_ADDR"] = "localhost"
+              if 'MASTER_PORT' not in os.environ:
+                     os.environ['MASTER_PORT'] = str(getattr(args, 'port', '29529'))
+              if 'MASTER_ADDR' not in os.environ:
+                     os.environ["MASTER_ADDR"] = "localhost"
        elif 'SLURM_PROCID' in os.environ:
               rank = int(os.environ['SLURM_PROCID'])
               gpu = rank % torch.cuda.device_count()
@@ -86,12 +88,18 @@ def is_dist_avail_and_initialized():
        return True
 
 
+def cleanup_distributed():
+       if is_dist_avail_and_initialized():
+              dist.destroy_process_group()
+
+
 
 def reduce_and_average_losses(loss_dict, device):
        torch.distributed.barrier()
        world_size = dist.get_world_size()
        for key in loss_dict.keys():
-              loss_tensor = torch.tensor([loss_dict[key].item()]).to(device)
+              value = loss_dict[key].item() if hasattr(loss_dict[key], "item") else loss_dict[key]
+              loss_tensor = torch.tensor([value]).to(device)
               dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
               loss_dict[key] = loss_tensor.item() / world_size
        return loss_dict

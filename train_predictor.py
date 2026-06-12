@@ -1,3 +1,6 @@
+'''
+
+'''
 import os
 import torch
 import argparse
@@ -28,10 +31,45 @@ def boolean(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+
+def _compact_value(value):
+    if value is None:
+        return "none"
+    if isinstance(value, float):
+        value = f"{value:g}"
+    else:
+        value = str(value)
+    return (
+        value
+        .replace(".", "p")
+        .replace("-", "m")
+        .replace("/", "_")
+        .replace(" ", "")
+    )
+
+
+def _apply_sweep_name(args):
+    if not os.environ.get("WANDB_SWEEP_ID"):
+        return
+
+    args.base_name = args.name
+    anchor_t = args.anchor_t_sync if args.anchor_t_sync is not None else args.anchor_sampling_t_start
+    suffix = "_".join([
+        args.anchor_score_loss_type,
+        f"tau{_compact_value(args.anchor_score_soft_label_tau)}",
+        f"sw{_compact_value(args.anchor_score_loss)}",
+        f"lr{_compact_value(args.learning_rate)}",
+        f"warm{_compact_value(args.warm_up_epoch)}",
+        f"t{_compact_value(anchor_t)}",
+        f"K{_compact_value(args.num_ego_anchors)}",
+    ])
+    args.name = f"{args.name}_{suffix}"
+
+
 def get_args():
     # Arguments
     parser = argparse.ArgumentParser(description='Training')
-    parser.add_argument('--name', type=str, help='log name (default: "diffusion-planner-training")', default="diffusion-planner-training")
+    parser.add_argument('--name', type=str, help='base log name; sweep runs append key hyperparameters automatically', default="diffusion-planner-training")
     parser.add_argument('--save_dir', type=str, help='save dir for model ckpt', default=".")
 
     # Data
@@ -68,13 +106,31 @@ def get_args():
     parser.add_argument('--seed', type=int, help='fix random seed', default=3407)
     parser.add_argument('--train_epochs', type=int, help='epochs of training', default=500)
     parser.add_argument('--save_utd', type=int, help='save frequency', default=20)
+    parser.add_argument('--save_last', default=True, type=boolean)
     parser.add_argument('--batch_size', type=int, help='batch size (default: 2048)', default=2048)
+    parser.add_argument('--target_effective_batch_size', type=int, help='global batch size after gradient accumulation; 0 disables sample-based accumulation', default=0)
     parser.add_argument('--learning_rate', type=float, help='learning rate (default: 5e-4)', default=5e-4)
     parser.add_argument('--warm_up_epoch', type=int, help='number of warm up', default=5)
     parser.add_argument('--encoder_drop_path_rate', type=float, help='encoder drop out rate', default=0.1)
     parser.add_argument('--decoder_drop_path_rate', type=float, help='decoder drop out rate', default=0.1)
 
     parser.add_argument('--alpha_planning_loss', type=float, help='coefficient of planning loss (default: 1.0)', default=1.0)
+    parser.add_argument('--planning_hybrid_loss', type=float, help='coefficient of ego waypoint hybrid loss (default: 0.01)', default=0.01)
+    parser.add_argument('--use_ego_anchor', default=False, type=boolean)
+    parser.add_argument('--ego_anchor_path', default=None, type=str)
+    parser.add_argument('--ego_anchor_state_format', default='delta', choices=['delta', 'absolute'], type=str)
+    parser.add_argument('--num_ego_anchors', default=0, type=int)
+    parser.add_argument('--ego_anchor_t_min', default=1e-3, type=float)
+    parser.add_argument('--ego_anchor_t_max', default=0.2, type=float)
+    parser.add_argument('--anchor_t_sync', default=None, type=float, help='if set, use the same value for ego_anchor_t_max and anchor_sampling_t_start')
+    parser.add_argument('--anchor_neighbor_all_loss', default=0.1, type=float)
+    parser.add_argument('--anchor_score_loss', default=0.1, type=float)
+    parser.add_argument('--anchor_score_loss_type', default='focal', choices=['focal', 'ce', 'soft_ce'], type=str)
+    parser.add_argument('--anchor_score_soft_label_tau', default=1.0, type=float)
+    parser.add_argument('--use_anchor_score', default=True, type=boolean)
+    parser.add_argument('--anchor_sampling_t_start', default=0.2, type=float)
+    parser.add_argument('--anchor_sampling_steps', default=10, type=int)
+    parser.add_argument('--anchor_neighbor_init', default='cv', choices=['noise', 'cv'], type=str)
 
     parser.add_argument('--device', type=str, help='run on which device (default: cuda)', default='cuda')
 
@@ -85,13 +141,19 @@ def get_args():
     parser.add_argument('--decoder_depth', type=int, help='number of decoding layers', default=3)
     parser.add_argument('--num_heads', type=int, help='number of multi-head', default=6)
     parser.add_argument('--hidden_dim', type=int, help='hidden dimension', default=192)
-    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model [x_start, score]', choices=['score', 'x_start'], default='x_start')
+    parser.add_argument('--diffusion_model_type', type=str, help='type of diffusion model prediction', choices=['v', 'x_start', 'noise', 'score'], default='x_start')
+    parser.add_argument('--diffusion_supervision_type', type=str, help='type of diffusion model supervision', choices=['v', 'x_start', 'noise', 'score'], default='x_start')
 
     # decoder
     parser.add_argument('--predicted_neighbor_num', type=int, help='number of neighbor agents to predict', default=10)
     parser.add_argument('--resume_model_path', type=str, help='path to resume model', default=None)
 
     parser.add_argument('--use_wandb', default=False, type=boolean)
+    parser.add_argument('--wandb_project', default='Diffusion-Planner', type=str)
+    parser.add_argument('--wandb_entity', default=None, type=str)
+    parser.add_argument('--wandb_group', default=None, type=str)
+    parser.add_argument('--wandb_mode', default=None, choices=['online', 'offline', 'disabled'], type=str)
+    parser.add_argument('--wandb_tags', default='', type=str, help='comma-separated wandb tags')
     parser.add_argument('--notes', default='', type=str)
 
     # distributed training parameters
@@ -99,9 +161,14 @@ def get_args():
     parser.add_argument('--port', default='22323', type=str, help='port')
 
     args = parser.parse_args()
+    if args.anchor_t_sync is not None:
+        args.ego_anchor_t_max = args.anchor_t_sync
+        args.anchor_sampling_t_start = args.anchor_t_sync
+    _apply_sweep_name(args)
 
     args.state_normalizer = StateNormalizer.from_json(args)
     args.observation_normalizer = ObservationNormalizer.from_json(args)
+    args.guidance_fn = None
     
     return args
 
@@ -109,6 +176,8 @@ def model_training(args):
 
     # init ddp
     global_rank, rank, _ = ddp.ddp_setup_universal(True, args)
+    if not ddp.is_dist_avail_and_initialized():
+        args.ddp = False
 
     if global_rank == 0:
         # Logging
@@ -191,26 +260,49 @@ def model_training(args):
     if args.ddp:
         torch.distributed.barrier()
 
-    # begin training
-    for epoch in range(init_epoch, train_epochs):
+    training_finished = False
+    last_epoch_trained = None
+    try:
+        # begin training
+        for epoch in range(init_epoch, train_epochs):
+            if global_rank == 0:
+                print(f"Epoch {epoch+1}/{train_epochs}")
+            train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
+            
+
+
+            if global_rank == 0:
+                lr_dict = {'lr': optimizer.param_groups[0]['lr']}
+                wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
+                wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
+
+                if (epoch+1) % args.save_utd == 0:
+                    # save model at the end of epoch
+                    save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_logger.id, model_ema.ema)
+                    print(f"Model saved in {save_path}\n")
+
+            scheduler.step()
+            train_sampler.set_epoch(epoch + 1)
+            last_epoch_trained = epoch
+        training_finished = True
+        if global_rank == 0 and args.save_last and last_epoch_trained is not None and (last_epoch_trained + 1) % args.save_utd != 0:
+            save_model(diffusion_planner, optimizer, scheduler, save_path, last_epoch_trained, train_total_loss, wandb_logger.id, model_ema.ema)
+            print(f"Final model saved in {save_path}\n")
+    finally:
+        if args.device == 'cuda':
+            torch.cuda.synchronize()
+
+        if training_finished and args.ddp and ddp.is_dist_avail_and_initialized():
+            torch.distributed.barrier()
+
         if global_rank == 0:
-            print(f"Epoch {epoch+1}/{train_epochs}")
-        train_loss, train_total_loss = train_epoch(train_loader, diffusion_planner, optimizer, args, model_ema, aug)
-        
+            wandb_logger.finish()
 
+        if training_finished and args.ddp and ddp.is_dist_avail_and_initialized():
+            torch.distributed.barrier()
 
-        if global_rank == 0:
-            lr_dict = {'lr': optimizer.param_groups[0]['lr']}
-            wandb_logger.log_metrics({f"train_loss/{k}": v for k, v in train_loss.items()}, step=epoch+1)
-            wandb_logger.log_metrics({f"lr/{k}": v for k, v in lr_dict.items()}, step=epoch+1)
-
-            if (epoch+1) % args.save_utd == 0:
-                # save model at the end of epoch
-                save_model(diffusion_planner, optimizer, scheduler, save_path, epoch, train_total_loss, wandb_logger.id, model_ema.ema)
-                print(f"Model saved in {save_path}\n")
-
-        scheduler.step()
-        train_sampler.set_epoch(epoch + 1)
+        if args.ddp and ddp.is_dist_avail_and_initialized():
+            ddp.cleanup_distributed()
 
 if __name__ == "__main__":
 

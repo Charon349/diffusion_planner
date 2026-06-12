@@ -17,9 +17,38 @@ class Diffusion_Planner(nn.Module):
     def sde(self):
         return self.decoder.decoder.sde
     
-    def forward(self, inputs):
+    def forward(self, inputs, encoder_outputs=None):
+        K = inputs.get("anchor_branch_count", None)
 
-        encoder_outputs = self.encoder(inputs)
+        if K is not None:
+            if encoder_outputs is None:
+                encoder_outputs = self.encoder(inputs)
+
+            decoder_inputs = {
+                "sampled_trajectories": inputs["sampled_trajectories"],
+                "diffusion_time": inputs["diffusion_time"],
+                "anchor_branch_count": K,
+            }
+            if "wta_idx" in inputs:
+                decoder_inputs["wta_idx"] = inputs["wta_idx"]
+            for key in ("ego_current_state", "neighbor_agents_past", "route_lanes"):
+                if key in inputs:
+                    decoder_inputs[key] = inputs[key]
+
+            decoder_outputs = self.decoder(encoder_outputs, decoder_inputs)
+            
+            if "clean_sampled_trajectories" in inputs:
+                clean_decoder_inputs = decoder_inputs.copy()
+                clean_decoder_inputs["sampled_trajectories"] = inputs["clean_sampled_trajectories"]
+                clean_decoder_inputs["diffusion_time"] = inputs["clean_diffusion_time"]
+                clean_decoder_inputs["wta_idx"] = None
+                clean_decoder_outputs = self.decoder(encoder_outputs, clean_decoder_inputs)
+                decoder_outputs["clean_branch_logits"] = clean_decoder_outputs.get("branch_logits", None)
+
+            return encoder_outputs, decoder_outputs
+
+        if encoder_outputs is None:
+            encoder_outputs = self.encoder(inputs)
         decoder_outputs = self.decoder(encoder_outputs, inputs)
 
         return encoder_outputs, decoder_outputs
