@@ -12,7 +12,7 @@ TRAIN_SET_LIST_PATH="/mnt/workspace/users/wangchenggang/Diffusion-Planner/nuplan
 ###################################
 
 $RUN_PYTHON_PATH -m torch.distributed.run --nnodes 1 --nproc-per-node $NPROC_PER_NODE --master_port 29566 --standalone train_predictor.py \
---name "score_head_2" \
+--name "l2_loss_decouple" \
 --train_set  $TRAIN_SET_PATH \
 --train_set_list  $TRAIN_SET_LIST_PATH \
 --use_ego_anchor true \
@@ -28,11 +28,11 @@ $RUN_PYTHON_PATH -m torch.distributed.run --nnodes 1 --nproc-per-node $NPROC_PER
 --train_epochs 150 \
 --target_effective_batch_size 1024 \
 --anchor_score_loss_type 'soft_ce' \
---anchor_score_soft_label_tau 0.1 \
+--anchor_score_soft_label_tau 0.25 \
 --anchor_score_loss 5.0 \
 --anchor_w_lat 1.0 \
---anchor_w_lon 0.05 \
+--anchor_w_lon 0.2 \
 --save_utd 5 \
---save_dir "/mnt/workspace/users/wangchenggang/Diffusion-Planner_2/results"
+--save_dir "/mnt/workspace/users/wangchenggang/Diffusion-Planner_3/results"
 
 

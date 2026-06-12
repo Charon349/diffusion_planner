@@ -204,12 +204,17 @@ def anchored_diffusion_loss_func(
     t_max = getattr(anchor_args, "ego_anchor_t_max", 0.2)
     t = torch.rand(B, device=device) * (t_max - t_min) + t_min
 
+    norm_gt_future = norm(gt_future)
+    norm_gt_ego = norm_gt_future[:, :1].expand(B, K, T, 4)
+    norm_gt_neighbors = norm_gt_future[:, 1:]
+    norm_gt_future_expanded = torch.cat([norm_gt_ego, norm_gt_neighbors], dim=1)
+
     gt_ego = ego_future_vel[:, None].expand(B, K, T, 4)
     gt_future = torch.cat([gt_ego, neighbors_future], dim=1)
     current_ego = ego_current[:, None].expand(B, K, 4)
     current_states = torch.cat([current_ego, neighbors_current], dim=1)
 
-    all_gt = torch.cat([current_states[:, :, None, :], norm(gt_future)], dim=2)
+    all_gt = torch.cat([current_states[:, :, None, :], norm_gt_future_expanded], dim=2)
     all_gt[:, K:][neighbor_mask] = 0.0
 
     mean, std = sde.marginal_prob(all_gt[..., 1:, :], t)
