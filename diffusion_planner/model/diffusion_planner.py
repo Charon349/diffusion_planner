@@ -41,7 +41,6 @@ class Diffusion_Planner(nn.Module):
                 clean_decoder_inputs = decoder_inputs.copy()
                 clean_decoder_inputs["sampled_trajectories"] = inputs["clean_sampled_trajectories"]
                 clean_decoder_inputs["diffusion_time"] = inputs["clean_diffusion_time"]
-                clean_decoder_inputs["wta_idx"] = None
                 clean_decoder_outputs = self.decoder(encoder_outputs, clean_decoder_inputs)
                 decoder_outputs["clean_branch_logits"] = clean_decoder_outputs.get("branch_logits", None)
 

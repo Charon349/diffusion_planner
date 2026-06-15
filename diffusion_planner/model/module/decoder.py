@@ -33,6 +33,17 @@ def integrate_ego_modes(target_future, num_ego_slots):
     return torch.cat([ego_future, target_future[:, num_ego_slots:]], dim=1)
 
 
+def inverse_anchor_sequence(data, state_normalizer, num_ego_slots):
+    mean = state_normalizer.mean.to(data.device)
+    std = state_normalizer.std.to(data.device)
+    ego = data[:, :num_ego_slots] * std[:1] + mean[:1]
+    neighbor_count = data.shape[1] - num_ego_slots
+    if neighbor_count <= 0:
+        return ego
+    neighbors = data[:, num_ego_slots:] * std[1:1 + neighbor_count] + mean[1:1 + neighbor_count]
+    return torch.cat([ego, neighbors], dim=1)
+
+
 class Decoder(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -186,7 +197,11 @@ class Decoder(nn.Module):
             },
         )
 
-        x0 = self._state_normalizer.inverse(x0.reshape(B, K + P - 1, -1, 4))[:, :, 1:]
+        x0 = inverse_anchor_sequence(
+            x0.reshape(B, K + P - 1, -1, 4),
+            self._state_normalizer,
+            K,
+        )[:, :, 1:]
         x0 = integrate_ego_modes(x0, K)
 
         if best_k is None:
@@ -446,6 +461,8 @@ class DiT(nn.Module):
         if wta_idx is not None:
             selected = wta_idx.to(device).view(batch_size, 1, 1).expand(-1, total_slots - ego, 1)
             mask[:, ego:, :ego].scatter_(2, selected, False)
+        else:
+            mask[:, ego:, 0] = False
 
         return mask.repeat_interleave(self._num_heads, dim=0)
 

@@ -55,6 +55,28 @@ def _repeat_tensor_dict(data: Dict[str, torch.Tensor], repeat: int) -> Dict[str,
     return repeated
 
 
+def _normalize_anchor_sequence(data: torch.Tensor, norm: StateNormalizer, num_ego_slots: int) -> torch.Tensor:
+    mean = norm.mean.to(data.device)
+    std = norm.std.to(data.device)
+    ego = (data[:, :num_ego_slots] - mean[:1]) / std[:1]
+    neighbor_count = data.shape[1] - num_ego_slots
+    if neighbor_count <= 0:
+        return ego
+    neighbors = (data[:, num_ego_slots:] - mean[1:1 + neighbor_count]) / std[1:1 + neighbor_count]
+    return torch.cat([ego, neighbors], dim=1)
+
+
+def _inverse_anchor_sequence(data: torch.Tensor, norm: StateNormalizer, num_ego_slots: int) -> torch.Tensor:
+    mean = norm.mean.to(data.device)
+    std = norm.std.to(data.device)
+    ego = data[:, :num_ego_slots] * std[:1] + mean[:1]
+    neighbor_count = data.shape[1] - num_ego_slots
+    if neighbor_count <= 0:
+        return ego
+    neighbors = data[:, num_ego_slots:] * std[1:1 + neighbor_count] + mean[1:1 + neighbor_count]
+    return torch.cat([ego, neighbors], dim=1)
+
+
 def _get_ego_anchors(anchor_args, device: torch.device, future_len: int) -> torch.Tensor:
     anchors = getattr(anchor_args, "_ego_anchor_tensor", None)
     if anchors is None:
@@ -204,15 +226,11 @@ def anchored_diffusion_loss_func(
     t_max = getattr(anchor_args, "ego_anchor_t_max", 0.2)
     t = torch.rand(B, device=device) * (t_max - t_min) + t_min
 
-    norm_gt_future = norm(gt_future)
-    norm_gt_ego = norm_gt_future[:, :1].expand(B, K, T, 4)
-    norm_gt_neighbors = norm_gt_future[:, 1:]
-    norm_gt_future_expanded = torch.cat([norm_gt_ego, norm_gt_neighbors], dim=1)
-
     gt_ego = ego_future_vel[:, None].expand(B, K, T, 4)
     gt_future = torch.cat([gt_ego, neighbors_future], dim=1)
     current_ego = ego_current[:, None].expand(B, K, 4)
     current_states = torch.cat([current_ego, neighbors_current], dim=1)
+    norm_gt_future_expanded = _normalize_anchor_sequence(gt_future, norm, K)
 
     all_gt = torch.cat([current_states[:, :, None, :], norm_gt_future_expanded], dim=2)
     all_gt[:, K:][neighbor_mask] = 0.0
@@ -247,6 +265,9 @@ def anchored_diffusion_loss_func(
     encoder_outputs, decoder_output = model(merged_inputs)
     score = decoder_output["score"][:, :, 1:, :]
     pred_x_start = sde.transform(f"{model_type}->x_start", score, t, x_t)
+    valid_future = torch.ones((B, K + Pn, T, 1), dtype=torch.bool, device=device)
+    valid_future[:, K:] = neighbors_future_valid[..., None]
+    pred_x_start = torch.where(valid_future, pred_x_start, all_gt[:, :, 1:, :])
 
     diff = (pred_x_start - all_gt[:, :, 1:, :]) ** 2
     dim_weight = torch.tensor(
@@ -275,7 +296,7 @@ def anchored_diffusion_loss_func(
 
     ego_planning_diffusion_loss = pos_ego_loss.mean()
 
-    pred_target_future = norm.inverse(pred_x_start)
+    pred_target_future = _inverse_anchor_sequence(pred_x_start, norm, K)
     selected_ego = pred_target_future[batch_idx, pos_k]
     selected_future = torch.cat([selected_ego[:, None], pred_target_future[:, K:]], dim=1)
     pred_future = integrate_ego_velocity(selected_future, detach_window_size=10)
