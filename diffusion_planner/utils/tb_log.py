@@ -11,8 +11,6 @@ def _wandb_config_from_args(args):
     for key, value in vars(args).items():
         if isinstance(value, (StateNormalizer, ObservationNormalizer)):
             config[key] = value.to_dict()
-        elif key == "guidance_fn":
-            config[key] = None
         else:
             config[key] = value
     return config

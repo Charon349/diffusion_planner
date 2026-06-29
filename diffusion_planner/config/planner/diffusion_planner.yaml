@@ -8,7 +8,6 @@ diffusion_planner:
 
     args_file: ???
 
-    guidance_fn: null
   ckpt_path: ???
 
   past_trajectory_sampling:

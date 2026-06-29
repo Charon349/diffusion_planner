@@ -6,11 +6,11 @@ set -euo pipefail
 # and synchronized anchor diffusion time.
 
 LOSS_TYPE="soft_ce"
-ANCHOR_W_LONS=("0.05")
+ANCHOR_W_LONS=("0.01")
 SOFT_LABEL_TAUS=("0.1" "0.15" "0.25")
 ANCHOR_SCORE_LOSSES=("1" "5" "10")
 ANCHOR_T_SYNCS=("0.1" "0.15" "0.2")
-export MASTER_PORT="${MASTER_PORT:-29562}"
+export MASTER_PORT="${MASTER_PORT:-29564}"
 
 NUM_EGO_ANCHORS="128"
 TARGET_EFFECTIVE_BATCH_SIZE="1024"

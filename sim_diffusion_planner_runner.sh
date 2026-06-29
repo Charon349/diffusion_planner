@@ -5,10 +5,10 @@ export HYDRA_FULL_ERROR=1
 # User Configuration Section
 ###################################
 # Set environment variables
-export NUPLAN_DEVKIT_ROOT="${NUPLAN_DEVKIT_ROOT:-/home/wangchenggang/wcg/nuplan-devkit}"  # nuplan-devkit absolute path (e.g., "/home/user/nuplan-devkit")
+export NUPLAN_DEVKIT_ROOT="${NUPLAN_DEVKIT_ROOT:-/mnt/workspace/users/wangchenggang/nuplan-devkit}"  # nuplan-devkit absolute path (e.g., "/home/user/nuplan-devkit")
 export NUPLAN_DATA_ROOT="${NUPLAN_DATA_ROOT:-/mnt/workspace/shared/pnc/data/nuplan/dataset}"  # nuplan dataset absolute path (e.g. "/data")
 export NUPLAN_MAPS_ROOT="${NUPLAN_MAPS_ROOT:-/mnt/workspace/shared/pnc/data/nuplan/dataset/maps}" # nuplan maps absolute path (e.g. "/data/nuplan-v1.1/maps")
-export NUPLAN_EXP_ROOT="${NUPLAN_EXP_ROOT:-/mnt/workspace/users/wangchenggang/Diffusion-Planner/val_simulation}" # nuplan experiment absolute path (e.g. "/data/nuplan-v1.1/exp")
+export NUPLAN_EXP_ROOT="${NUPLAN_EXP_ROOT:-/mnt/workspace/users/wangchenggang/Diffusion-Planner_4/val_simulation}" # nuplan experiment absolute path (e.g. "/data/nuplan-v1.1/exp")
 
 # Dataset split to use
 # Options: 
@@ -26,8 +26,8 @@ CHALLENGE="${CHALLENGE:-closed_loop_reactive_agents}"  # e.g., "closed_loop_nonr
 
 
 BRANCH_NAME="${BRANCH_NAME:-diffusion_planner_release}"
-ARGS_FILE="${ARGS_FILE:-/mnt/workspace/users/wangchenggang/Diffusion-Planner/results/training_log/ego_anchor_64_score_head/2026-06-01-11:13:45/args.json}"
-CKPT_FILE="${CKPT_FILE:-/mnt/workspace/users/wangchenggang/Diffusion-Planner/results/training_log/ego_anchor_64_score_head/2026-06-01-11:13:45/model_epoch_150_trainloss_0.0379.pth}"
+ARGS_FILE="${ARGS_FILE:-/mnt/workspace/users/wangchenggang/Diffusion-Planner_3/results/training_log/l2_loss_decouple/2026-06-15-09:41:26/args.json}"
+CKPT_FILE="${CKPT_FILE:-/mnt/workspace/users/wangchenggang/Diffusion-Planner_3/results/training_log/l2_loss_decouple/2026-06-15-09:41:26/latest.pth}"
 
 if [ "$SPLIT" == "val14" ]; then
     SCENARIO_BUILDER="nuplan"
@@ -61,7 +61,7 @@ python $NUPLAN_DEVKIT_ROOT/nuplan/planning/script/run_simulation.py \
     experiment_uid=$EXPERIMENT_UID \
     verbose=true \
     worker=ray_distributed \
-    worker.threads_per_node=84 \
+    worker.threads_per_node=80 \
     distributed_mode='SINGLE_NODE' \
     number_of_gpus_allocated_per_simulation=0.025 \
     enable_simulation_progress_bar=true \

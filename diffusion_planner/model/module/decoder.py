@@ -72,7 +72,6 @@ class Decoder(nn.Module):
         self._state_normalizer: StateNormalizer = config.state_normalizer
         self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
         
-        self._guidance_fn = config.guidance_fn
 
         anchors = None
         if self._use_ego_anchor:
@@ -157,9 +156,6 @@ class Decoder(nn.Module):
             xt[:, :, 0, :] = current_states
             return xt.reshape(B, K + P - 1, -1)
 
-        guidance_inputs = dict(inputs)
-        guidance_inputs["neighbor_current_mask"] = neighbor_current_mask
-
         x0 = dpm_sampler(
             self.dit,
             xT,
@@ -173,24 +169,6 @@ class Decoder(nn.Module):
             },
             dpm_solver_params={
                 "correcting_xt_fn": initial_state_constraint,
-            },
-            model_wrapper_params={
-                "classifier_fn": self._guidance_fn,
-                "classifier_kwargs": {
-                    "model": self.dit,
-                    "model_condition": {
-                        "cross_c": ego_neighbor_encoding,
-                        "route_lanes": route_lanes,
-                        "neighbor_current_mask": neighbor_current_mask,
-                        "num_ego_slots": K,
-                        "wta_idx": best_k,
-                    },
-                    "inputs": guidance_inputs,
-                    "observation_normalizer": self._observation_normalizer,
-                    "state_normalizer": self._state_normalizer,
-                },
-                "guidance_scale": 0.5,
-                "guidance_type": "classifier" if self._guidance_fn is not None else "uncond",
             },
             sample_params={
                 "t_start": self._anchor_sampling_t_start,
@@ -331,22 +309,6 @@ class Decoder(nn.Module):
                         },
                         dpm_solver_params={
                             "correcting_xt_fn":initial_state_constraint,
-                        },
-                        model_wrapper_params={
-                            "classifier_fn": self._guidance_fn,
-                            "classifier_kwargs": {
-                                "model": self.dit,
-                                "model_condition": {
-                                    "cross_c": ego_neighbor_encoding, 
-                                    "route_lanes": route_lanes,
-                                    "neighbor_current_mask": neighbor_current_mask                            
-                                },
-                                "inputs": inputs,
-                                "observation_normalizer": self._observation_normalizer,
-                                "state_normalizer": self._state_normalizer
-                            },
-                            "guidance_scale": 0.5,
-                            "guidance_type": "classifier" if self._guidance_fn is not None else "uncond"
                         },
                 )
             x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]

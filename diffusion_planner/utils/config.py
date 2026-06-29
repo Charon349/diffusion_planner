@@ -9,7 +9,6 @@ class Config:
     def __init__(
             self,
             args_file,
-            guidance_fn
     ):
         with open(args_file, 'r') as f:
             args_dict = json.load(f)
@@ -39,5 +38,3 @@ class Config:
                 'std': torch.as_tensor(v['std'])
             } for k, v in self.observation_normalizer.items()
         })
-        
-        self.guidance_fn = guidance_fn

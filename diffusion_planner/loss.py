@@ -11,10 +11,6 @@ from diffusion_planner.utils.traj_kinematics import integrate_ego_velocity
 # # Keep the original trajectory L2 as the main objective, then add small ego-only
 # # heading regularizers to reduce post-turn heading oscillation.
 DEFAULT_HEADING_DIM_WEIGHT = 1.0
-DEFAULT_EGO_HEADING_LOSS_WEIGHT = 0.2
-DEFAULT_UNIT_CIRCLE_LOSS_WEIGHT = 0.05
-DEFAULT_KINEMATIC_LOSS_WEIGHT = 0.1
-DEFAULT_KINEMATIC_SPEED_THRESHOLD = 0.1
 
 
 def py_sigmoid_focal_loss(
@@ -114,68 +110,6 @@ def _closest_anchor_indices(anchors: torch.Tensor, ego_future: torch.Tensor) -> 
     return _anchor_distances(anchors, ego_future).argmin(dim=1)
 
 
-# def heading_alignment_loss(
-#     pred_future: torch.Tensor,
-#     gt_future: torch.Tensor,
-#     valid_mask: torch.Tensor = None,
-# ) -> torch.Tensor:
-#     """
-#     Penalize heading mismatch using normalized cos/sin heading vectors.
-
-#     Args:
-#         pred_future: Predicted future states [..., 4] in unnormalized coordinates.
-#         gt_future: Ground-truth future states [..., 4] in unnormalized coordinates.
-#         valid_mask: Optional boolean mask for valid timesteps, matching pred_future[..., 0].
-#     """
-#     pred_heading = pred_future[..., 2:4]
-#     gt_heading = gt_future[..., 2:4]
-
-#     pred_heading = pred_heading / pred_heading.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-#     gt_heading = gt_heading / gt_heading.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-
-#     cosine = torch.sum(pred_heading * gt_heading, dim=-1).clamp(-1.0, 1.0)
-#     loss = 1.0 - cosine
-
-#     if valid_mask is not None:
-#         loss = loss[valid_mask]
-
-#     if loss.numel() == 0:
-#         return torch.tensor(0.0, device=pred_future.device)
-
-#     return loss.mean()
-
-
-# def unit_circle_loss(pred_future: torch.Tensor) -> torch.Tensor:
-#     """Keep predicted ego heading as a valid cos/sin vector."""
-#     ego_heading = pred_future[:, 0, :, 2:4]
-#     heading_norm_sq = torch.sum(ego_heading ** 2, dim=-1)
-#     return ((heading_norm_sq - 1.0) ** 2).mean()
-
-
-# def kinematic_heading_loss(
-#     pred_future: torch.Tensor,
-#     speed_threshold: float = DEFAULT_KINEMATIC_SPEED_THRESHOLD,
-# ) -> torch.Tensor:
-#     """Align ego heading with the direction of predicted motion when the ego is moving."""
-#     ego_future = pred_future[:, 0]
-#     dx = ego_future[:, 1:, 0] - ego_future[:, :-1, 0]
-#     dy = ego_future[:, 1:, 1] - ego_future[:, :-1, 1]
-#     displacement = torch.sqrt(dx ** 2 + dy ** 2 + 1e-6)
-
-#     vel_cos = dx / displacement
-#     vel_sin = dy / displacement
-
-#     pred_heading = ego_future[:, :-1, 2:4]
-#     pred_heading = pred_heading / pred_heading.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-
-#     cos_sim = vel_cos * pred_heading[..., 0] + vel_sin * pred_heading[..., 1]
-#     loss = 1.0 - cos_sim.clamp(-1.0, 1.0)
-
-#     moving_mask = displacement > speed_threshold
-#     if not moving_mask.any():
-#         return torch.tensor(0.0, device=pred_future.device)
-
-#     return loss[moving_mask].mean()
 
 
 def anchored_diffusion_loss_func(
